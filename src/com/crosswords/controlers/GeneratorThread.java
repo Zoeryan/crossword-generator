@@ -223,11 +223,11 @@ public class GeneratorThread extends Thread {
 
         for (int i = 0; i < word.length(); i++) {
             if (newWordDirection == Direction.Horizontal) {
-                if (crosspoint.y + 1 < maxSizeVertical && startPoint + i != crosspoint.x && isWordChar(matrix[startPoint + i][crosspoint.y + 1])) {
+                if (crosspoint.y + 1 < maxSizeVertical && matrix[startPoint + i][crosspoint.y] != word.charAt(i) && isWordChar(matrix[startPoint + i][crosspoint.y + 1])) {
                     undoAddingLetters(lettersAdded);
                     return false;
                 }
-                if (crosspoint.y - 1 >= 0 && startPoint + i != crosspoint.x && isWordChar(matrix[startPoint + i][crosspoint.y - 1])) {
+                if (crosspoint.y - 1 >= 0 && matrix[startPoint + i][crosspoint.y] != word.charAt(i) && isWordChar(matrix[startPoint + i][crosspoint.y - 1])) {
                     undoAddingLetters(lettersAdded);
                     return false;
                 }
@@ -236,18 +236,18 @@ public class GeneratorThread extends Thread {
                     return false;
                 }
 
-                if (startPoint + i != crosspoint.x || matrix[startPoint + i][crosspoint.y] != word.charAt(i)) {
+                if (matrix[startPoint + i][crosspoint.y] != word.charAt(i)) {  // jeżeli nie jest miejscem skrzyzowania zinnym slowem i przeszlo wczesniejsze if-y
                     matrix[startPoint + i][crosspoint.y] = word.charAt(i);
                     cellsCurrentUsed++;  // nie liczymy przeciec
                     lettersAdded.add(new Point(startPoint + i, crosspoint.y));
                 }
 
             } else {
-                if (crosspoint.x + 1 < maxSizeHorizontal && startPoint + i != crosspoint.y && isWordChar(matrix[crosspoint.x + 1][startPoint + i])) {
+                if (crosspoint.x + 1 < maxSizeHorizontal && matrix[crosspoint.x][startPoint + i] != word.charAt(i) && isWordChar(matrix[crosspoint.x + 1][startPoint + i])) {
                     undoAddingLetters(lettersAdded);
                     return false;
                 }
-                if (crosspoint.x - 1 >= 0 && startPoint + i != crosspoint.y && isWordChar(matrix[crosspoint.x - 1][startPoint + i])) {
+                if (crosspoint.x - 1 >= 0 && matrix[crosspoint.x][startPoint + i] != word.charAt(i) && isWordChar(matrix[crosspoint.x - 1][startPoint + i])) {
                     undoAddingLetters(lettersAdded);
                     return false;
                 }
@@ -256,7 +256,7 @@ public class GeneratorThread extends Thread {
                     return false;
                 }
 
-                if (startPoint + i != crosspoint.y || matrix[crosspoint.x][startPoint + i] != word.charAt(i)) {
+                if (matrix[crosspoint.x][startPoint + i] != word.charAt(i)) {
                     matrix[crosspoint.x][startPoint + i] = word.charAt(i);
                     cellsCurrentUsed++;   // nie liczymy przeciec
                     lettersAdded.add(new Point(crosspoint.x, startPoint + i));
