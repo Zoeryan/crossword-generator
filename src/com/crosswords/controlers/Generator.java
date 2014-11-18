@@ -30,8 +30,9 @@ public class Generator {
 
         GeneratorThread[] ths = new GeneratorThread[processors];
 
+        if (words.size() == 0) return null;
         for (int i = 0; i < processors; i++) {
-            ths[i] = new GeneratorThread(words, maxWordsCount, maxSizeVertical, maxSizeHorizontal);
+            ths[i] = new GeneratorThread(new ArrayList<Word>(words), maxWordsCount, maxSizeVertical, maxSizeHorizontal);
             ths[i].start();
             ths[i].join();
             ths[i].printDebug();

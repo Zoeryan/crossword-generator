@@ -26,13 +26,14 @@ public class GeneratorThread extends Thread {
     private float fitness;
     private List<Word> words;
 
-    private int cellsUsed;
-    private int wordsUsed;
-    private int wordsCount;
-    private int maxWordsCount;
-    private int maxSizeHorizontal;
-    private int maxSizeVertical;
+    private int cellsUsed;          //liczba znaków zostało użytych w słowach
+    private int wordsUsed;          //liczba słów zostało użytych
+    private int wordsCount;         //liczba słów możliwych
+    private int maxWordsCount;      //liczba słów mogących być użyta (ograniczenie); jeśli wynosi 0 nie brane pod uwagę
+    private int maxSizeHorizontal;  //maksymnalba szerokość - wymiar w poiomie
+    private int maxSizeVertical;    //maksymalna wysokość - wymiar w pionie
 
+    //Najdalej odsunięte zajęte komórki przez znaki słów
     private int minX;
     private int minY;
     private int maxX;
@@ -40,12 +41,19 @@ public class GeneratorThread extends Thread {
 
     private Random rnd;
 
+    /**
+     * @param words             lista słów
+     * @param maxWordsCount     liczba słów mogących być użyta (ograniczenie); jeśli wynosi 0 nie brane pod uwagę
+     * @param maxSizeVertical   maksymalna wysokość
+     * @param maxSizeHorizontal maksymnalba szerokość
+     */
     public GeneratorThread(List words, int maxWordsCount, int maxSizeVertical, int maxSizeHorizontal) {
         cellsUsed = wordsUsed = 0;
         this.words = words;
         this.maxWordsCount = maxWordsCount;
         rnd = new Random();
         wordsCount = words.size();
+
 
         double tmp = Math.max((float) Math.sqrt(words.size()) * reduceSizeFactor, (float) this.words.get(0).getWord().length());
         int autoMaxSizeHorizontal = (int) (tmp * 1.5f);
@@ -55,11 +63,16 @@ public class GeneratorThread extends Thread {
         matrix = new char[this.maxSizeHorizontal][this.maxSizeVertical]; //inicializacja z początkową wielkościa
     }
 
+    /**
+     * Przegląda słowa do użycia. Czuwa nad zakończeniem algorytmu.
+     * Oblicza fitness po zakończeniu.
+     */
     public void run() {
 
         Queue<Word> q = new LinkedList<Word>();
 
         Word firstWord = words.get(0);     // zaczynamy od najdłuzszego słowa
+        words.remove(0);
         q.add(firstWord);
 
         Direction firstWordDirect = Direction.getRandomDirection();
@@ -76,7 +89,7 @@ public class GeneratorThread extends Thread {
             maxX = minX + firstWordLength - 1;
         } else {
             maxX = minX = x = getRandomInt(matrix.length - 1);
-            minY = y = getRandomInt(matrix[0].length - 1 - firstWordLength);
+            minY = y = getRandomInt(matrix[0].length - firstWordLength);
             for (int i = 0; i < firstWordLength; i++) {
                 matrix[x][y + i] = firstWord.getWord().charAt(i);
             }
@@ -132,14 +145,23 @@ public class GeneratorThread extends Thread {
         calculateFitness();
     }
 
+    /**
+     * Wyszukuje słowo mogące się skrzyżować w danym punkcie.
+     *
+     * @param point            punkt krzyżowania
+     * @param newWordDirection ułożenia słowa pionowe lub poziome
+     * @return obiekt Word jeśli krzyżowanie się powiodło, null w przeciwnym wypadku
+     */
     private Word cross(Point point, Direction newWordDirection) {
         int attempts = 0;
+
+        if (words.size() == 0) return null;
         do {
 
             Word word = searchWordToCross(matrix[point.x][point.y]);
             if (word == null) return null;
 
-            Point p = checkCollisions(word.getWord(), point, newWordDirection);// sprawdz w matrixie kolize
+            Point p = checkCollisions(word, point, newWordDirection);// sprawdz w matrixie kolize
             if (p != null)   //jesli skrzyzowanie powiedzie sie
             {
                 word.setPoint(p);
@@ -150,12 +172,20 @@ public class GeneratorThread extends Thread {
         return null;// cross failed
     }
 
-    private Point checkCollisions(String word, Point crosspoint, Direction newWordDirection) {
-        //sprawdz czy wyjezdza poza obszar
-        // sprawedź czy krzyżuje sie odpowiednio z istniejacymi słowami
-        // sprawdź czy nie styka sie z istniejacymi sł owami
+    /**
+     * Sprawdza czy mieści się w obszarze krzyżówki.
+     * Sprawdza czy krzyżuje sie odpowiednio z istniejacymi słowami.
+     * Sprawdza czy nie styka sie z istniejacymi słowami na krzyżówce.
+     *
+     * @param wordW            sprawdzane słowo
+     * @param crosspoint       punkt przecięcia z istniejącym słowem na krzyżówce
+     * @param newWordDirection ułozenie słowa pionowe lub poziome
+     * @return punkt krzyżowania
+     */
+    private Point checkCollisions(Word wordW, Point crosspoint, Direction newWordDirection) {
 
         char charS = matrix[crosspoint.x][crosspoint.y];
+        String word = wordW.getWord();
         int wordLength = word.length();
 
 
@@ -167,10 +197,11 @@ public class GeneratorThread extends Thread {
                 if (newWordDirection == Direction.Horizontal) {
                     if (crosspoint.x - i < 0 || crosspoint.x + wordLength - i - 1 >= maxSizeHorizontal)  //czy nie wychodzi poza plansze
                         continue;
-                    if ((crosspoint.x - i - 1 >= 0 && isWordChar(matrix[crosspoint.x - i - 1][crosspoint.y])) ||
-                            (crosspoint.x + wordLength - i - 1 < maxSizeHorizontal && isWordChar(matrix[crosspoint.x + wordLength - i - 1][crosspoint.y])))
-                        continue;           // czy nie graniczy z literą po skrajach   ??
-
+                    if (crosspoint.x - i - 1 >= 0) {
+                        if (isWordChar(matrix[crosspoint.x - i - 1][crosspoint.y]) &&
+                                (crosspoint.x + wordLength - i - 1 < maxSizeHorizontal && isWordChar(matrix[crosspoint.x + wordLength - i - 2][crosspoint.y])))
+                            continue;           // czy nie graniczy z literą po skrajach   ??
+                    }
                     crossPointsStartShift.add(crosspoint.x - i);   // odkad rozpocząć;
                     succesfullSearching = true;
                 }
@@ -178,10 +209,12 @@ public class GeneratorThread extends Thread {
                 if (newWordDirection == Direction.Vertical) {
                     if (crosspoint.y - i < 0 || crosspoint.y + wordLength - i - 1 >= maxSizeVertical)
                         continue;
-                    if ((crosspoint.y - i - 1 >= 0 && isWordChar(matrix[crosspoint.x][crosspoint.y - i - 1])) ||
-                            (crosspoint.y + wordLength - i + 1 < maxSizeVertical && isWordChar(matrix[crosspoint.x][crosspoint.y + wordLength - i + 1])))
-                        continue;
+                    if (crosspoint.y - i - 1 >= 0) {
+                        if ((isWordChar(matrix[crosspoint.x][crosspoint.y - i - 1])) &&
 
+                                (crosspoint.y + wordLength - i + 1 < maxSizeVertical && isWordChar(matrix[crosspoint.x][crosspoint.y + wordLength - i + 2])))
+                            continue;
+                    }
                     crossPointsStartShift.add(crosspoint.y - i);
                     succesfullSearching = true;
                 }
@@ -195,7 +228,7 @@ public class GeneratorThread extends Thread {
 
             crossPointsStartShift.remove(randomIndex);
 
-            if (trackWord(word, newWordDirection, crosspoint, startPoint)) {
+            if (trackWord(wordW, newWordDirection, crosspoint, startPoint)) {
                 if (newWordDirection == Direction.Horizontal)
                     return new Point(startPoint, crosspoint.y);
                 else return new Point(crosspoint.x, startPoint);
@@ -205,9 +238,20 @@ public class GeneratorThread extends Thread {
         return null;     // nie powiodło się
     }
 
-    private boolean trackWord(String word, Direction newWordDirection, Point crosspoint, int startPoint) {
+    /**
+     * Wstawia słowo w krzyżówce.
+     *
+     * @param word             sprawdzane słowo
+     * @param newWordDirection ułozenie słowa pionowe lub poziome
+     * @param crosspoint       punkt przecięcia z istniejącym słowem na krzyżówce
+     * @param startPoint       punkt rozpoczęcia nowego słowa (zależy od newWordDirection)
+     * @return czy słowo możę być poprawnie ułożone w krzyżówce
+     */
+
+    private boolean trackWord(Word wordW, Direction newWordDirection, Point crosspoint, int startPoint) {
         int cellsCurrentUsed = 0;
         List<Point> lettersAdded = new ArrayList<Point>();
+        String word = wordW.getWord();
 
         if (newWordDirection == Direction.Horizontal)     //??
         {
@@ -223,16 +267,11 @@ public class GeneratorThread extends Thread {
 
         for (int i = 0; i < word.length(); i++) {
             if (newWordDirection == Direction.Horizontal) {
-                if (crosspoint.y + 1 < maxSizeVertical && matrix[startPoint + i][crosspoint.y] != word.charAt(i) && isWordChar(matrix[startPoint + i][crosspoint.y + 1])) {
+                if ((crosspoint.y + 1 < maxSizeVertical && matrix[startPoint + i][crosspoint.y] != word.charAt(i) && isWordChar(matrix[startPoint + i][crosspoint.y + 1])) ||
+                        (crosspoint.y - 1 >= 0 && matrix[startPoint + i][crosspoint.y] != word.charAt(i) && isWordChar(matrix[startPoint + i][crosspoint.y - 1]))
+                        || (isWordChar(matrix[startPoint + i][crosspoint.y]) && matrix[startPoint + i][crosspoint.y] != word.charAt(i))) {         // jeśli napotka litere x innego słowa i nie jest taka sama
                     undoAddingLetters(lettersAdded);
-                    return false;
-                }
-                if (crosspoint.y - 1 >= 0 && matrix[startPoint + i][crosspoint.y] != word.charAt(i) && isWordChar(matrix[startPoint + i][crosspoint.y - 1])) {
-                    undoAddingLetters(lettersAdded);
-                    return false;
-                }
-                if (isWordChar(matrix[startPoint + i][crosspoint.y]) && matrix[startPoint + i][crosspoint.y] != word.charAt(i)) {         // jeśli napotka litere x innego słowa i nie jest taka sama
-                    undoAddingLetters(lettersAdded);
+                    words.add(wordW);
                     return false;
                 }
 
@@ -243,16 +282,10 @@ public class GeneratorThread extends Thread {
                 }
 
             } else {
-                if (crosspoint.x + 1 < maxSizeHorizontal && matrix[crosspoint.x][startPoint + i] != word.charAt(i) && isWordChar(matrix[crosspoint.x + 1][startPoint + i])) {
+                if ((crosspoint.x + 1 < maxSizeHorizontal && matrix[crosspoint.x][startPoint + i] != word.charAt(i) && isWordChar(matrix[crosspoint.x + 1][startPoint + i]))
+                        || (crosspoint.x - 1 >= 0 && matrix[crosspoint.x][startPoint + i] != word.charAt(i) && isWordChar(matrix[crosspoint.x - 1][startPoint + i])) || (isWordChar(matrix[crosspoint.x][startPoint + i]) && matrix[crosspoint.x][startPoint + i] != word.charAt(i))) {
                     undoAddingLetters(lettersAdded);
-                    return false;
-                }
-                if (crosspoint.x - 1 >= 0 && matrix[crosspoint.x][startPoint + i] != word.charAt(i) && isWordChar(matrix[crosspoint.x - 1][startPoint + i])) {
-                    undoAddingLetters(lettersAdded);
-                    return false;
-                }
-                if (isWordChar(matrix[crosspoint.x][startPoint + i]) && matrix[crosspoint.x][startPoint + i] != word.charAt(i)) {
-                    undoAddingLetters(lettersAdded);
+                    words.add(wordW);
                     return false;
                 }
 
@@ -275,39 +308,70 @@ public class GeneratorThread extends Thread {
         return true;
     }
 
-    private void undoAddingLetters(List<Point> lettersAdded) {
+    /**
+     * Usuwa uprzednio dodane dodane litery.
+     *
+     * @param lettersPlace usytuowanie liter do usunięcia.
+     */
+    private void undoAddingLetters(List<Point> lettersPlace) {
         Point p;
-        for (int i = 0; i < lettersAdded.size(); i++) {
-            p = lettersAdded.get(i);
+        for (int i = 0; i < lettersPlace.size(); i++) {
+            p = lettersPlace.get(i);
             matrix[p.x][p.y] = wipeChar;
         }
     }
 
+    /**
+     * Szukanie słowa z taką samą literą jak bieżące słowo w celach skrzyżowanie z nim.
+     *
+     * @param c             litera która ma być znaleziona.
+     * @return
+     */
     private Word searchWordToCross(char c) {   //szukanie słowa z taką samą literą
 
         int attempts = 0;
         do {
             int currentWordsIndex = getRandomInt(words.size() - 1);
             Word w = words.get(currentWordsIndex);
-            if (w.getWord().indexOf(c) != -1) return w;
+            if (w.getWord().indexOf(c) != -1) {
+                words.remove(currentWordsIndex);
+                return w;
+            }
         }
         while ((float) (++attempts / words.size()) < searchingIdenticalLetterFactor);
         return null;// failed
     }
 
+    /**
+     * Losuje liczbę całkowitą z przedziału od zera włącznie
+     *
+     * @param maxValue      liczba będąca górnym ograniczeniem (włącznie z nią)
+     * @return
+     */
     private int getRandomInt(int maxValue) {
         return rnd.nextInt(maxValue + 1);
     }
 
+    /**
+     * Oblicza współczynnik przystosowanie (fitness) dla otrzymanej krzyżówki.
+     */
     private void calculateFitness() {
         fitness = ((float) cellsUsed / (matrix[0].length * matrix.length) + (float) (wordsUsageFactor * wordsUsed / wordsCount)) / (float) (1 + wordsUsageFactor);
     }
 
+    /**
+     * Sprawdza czy znak jest znakiem uprawnionym do wystąpowanie w słowie w krzyżówce.
+     *
+     * @param c             znak do sprawdzenia
+     * @return Prawda jeśli jest uprawnionym znakiem do wystąpowanie w słowie w krzyżówce.
+     */
     private static boolean isWordChar(char c) {
         return c != '\u0000' && c != wipeChar;
     }
 
-    //DEBUG
+    /**
+     * Wypisywanie istotnych informacji w celach testowych.
+     */
     public void printDebug() {
         int sX = maxX - minX + 1;
         int sY = maxY - minY + 1;
