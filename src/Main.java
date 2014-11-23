@@ -10,8 +10,8 @@ public class Main {
         try {
 
             int maxWordsCount = 0;
-            int maxSizeVertical = 0;
-            int maxSizeHorizontal = 0;
+            int maxSizeVertical = 10;
+            int maxSizeHorizontal = 10;
 
             Generator gen = new Generator();
             GeneratorThread gt = gen.generate(maxWordsCount, maxSizeVertical, maxSizeHorizontal);

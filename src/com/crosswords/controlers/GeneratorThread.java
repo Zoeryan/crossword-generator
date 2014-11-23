@@ -18,27 +18,22 @@ public class GeneratorThread extends Thread {
     private static final float crossingFactor = 0.25f;
     private static final int wordsUsageFactor = 2;
     private static final float searchingIdenticalLetterFactor = 0.75f;
-    private static final float reduceSizeFactor = 0.4f;
     private static final char wipeChar = ' ';
-
-
+    Direction firstWordDirect;
     private char[][] matrix;
     private float fitness;
     private List<Word> words;
-
     private int cellsUsed;          //liczba znaków zostało użytych w słowach
     private int wordsUsed;          //liczba słów zostało użytych
     private int wordsCount;         //liczba słów możliwych
     private int maxWordsCount;      //liczba słów mogących być użyta (ograniczenie); jeśli wynosi 0 nie brane pod uwagę
     private int maxSizeHorizontal;  //maksymnalba szerokość - wymiar w poiomie
     private int maxSizeVertical;    //maksymalna wysokość - wymiar w pionie
-
     //Najdalej odsunięte zajęte komórki przez znaki słów
     private int minX;
     private int minY;
     private int maxX;
     private int maxY;
-
     private Random rnd;
 
     /**
@@ -47,20 +42,28 @@ public class GeneratorThread extends Thread {
      * @param maxSizeVertical   maksymalna wysokość
      * @param maxSizeHorizontal maksymnalba szerokość
      */
-    public GeneratorThread(List words, int maxWordsCount, int maxSizeVertical, int maxSizeHorizontal) {
+    public GeneratorThread(List words, int maxWordsCount, int maxSizeVertical, int maxSizeHorizontal, Direction firstWordDirect) {
         cellsUsed = wordsUsed = 0;
         this.words = words;
         this.maxWordsCount = maxWordsCount;
         rnd = new Random();
         wordsCount = words.size();
 
-
-        double tmp = Math.max((float) Math.sqrt(words.size()) * reduceSizeFactor, (float) this.words.get(0).getWord().length());
-        int autoMaxSizeHorizontal = (int) (tmp * 1.5f);
-        int autoMaxSizeVertical = (int) tmp;
-        this.maxSizeHorizontal = (maxSizeHorizontal != 0) ? maxSizeHorizontal : autoMaxSizeHorizontal;
-        this.maxSizeVertical = (maxSizeVertical != 0) ? maxSizeVertical : autoMaxSizeVertical;
+        this.firstWordDirect = firstWordDirect;
+        this.maxSizeVertical = maxSizeVertical;
+        this.maxSizeHorizontal = maxSizeHorizontal;
         matrix = new char[this.maxSizeHorizontal][this.maxSizeVertical]; //inicializacja z początkową wielkościa
+
+    }
+
+    /**
+     * Sprawdza czy znak jest znakiem uprawnionym do wystąpowanie w słowie w krzyżówce.
+     *
+     * @param c             znak do sprawdzenia
+     * @return Prawda jeśli jest uprawnionym znakiem do wystąpowanie w słowie w krzyżówce.
+     */
+    private static boolean isWordChar(char c) {
+        return c != '\u0000' && c != wipeChar;
     }
 
     /**
@@ -75,7 +78,7 @@ public class GeneratorThread extends Thread {
         words.remove(0);
         q.add(firstWord);
 
-        Direction firstWordDirect = Direction.getRandomDirection();
+
         firstWord.setDirection(firstWordDirect);
         int firstWordLength = firstWord.getWord().length();
         int x;
@@ -103,11 +106,13 @@ public class GeneratorThread extends Thread {
 
         do {   //dopóki jest coś w kolejce i  nie przekroczono limitu słów (jeśli to ost. jest niezbedne)
             Word currentWord = q.poll(); //wez nieuzyte słowo
+            if (currentWord == null) continue;
 
             Direction newWordDirection = Direction.getOpositeDirection(currentWord.getDirection());
 
             int currentWordSuccessfulCrossings = 0;
             int currentWordLength = currentWord.getWord().length();
+
 
             int startPoint = (currentWord.getDirection() == Direction.Horizontal) ? currentWord.getPoint().x : currentWord.getPoint().y;
 
@@ -119,6 +124,7 @@ public class GeneratorThread extends Thread {
 
                 if (temporaryPoints.size() == 0) break;
 
+
                 int index = getRandomInt(temporaryPoints.size() - 1);
                 int pointOneDim = temporaryPoints.get(index);
                 temporaryPoints.remove(index);
@@ -126,11 +132,14 @@ public class GeneratorThread extends Thread {
 
                 Point point = (currentWord.getDirection() == Direction.Horizontal) ? new Point(pointOneDim, currentWord.getPoint().y) : new Point(currentWord.getPoint().x, pointOneDim);
                 if (point.x < 0 || point.y < 0 || point.x >= maxSizeHorizontal || point.y >= maxSizeVertical)
-                    continue; //??
+                    continue;
 
                 Word crossingResult = cross(point, newWordDirection);// spróbuj skrzyżować
 
                 if (crossingResult != null) {
+                    //   lackWords = true;
+                    // break;
+
                     wordsUsed++;
                     currentWordSuccessfulCrossings++;
                     words.remove(crossingResult);
@@ -140,7 +149,7 @@ public class GeneratorThread extends Thread {
 
             } while ((float) (currentWordSuccessfulCrossings / currentWordLength) < crossingFactor);
         }
-        while (q.isEmpty() == false || (maxWordsCount == 0 && wordsUsed < maxWordsCount));
+        while (((q.isEmpty() == false || (maxWordsCount == 0 && wordsUsed < maxWordsCount))));
 
         calculateFitness();
     }
@@ -155,7 +164,8 @@ public class GeneratorThread extends Thread {
     private Word cross(Point point, Direction newWordDirection) {
         int attempts = 0;
 
-        if (words.size() == 0) return null;
+        float actual = 1.0f;
+
         do {
 
             Word word = searchWordToCross(matrix[point.x][point.y]);
@@ -167,7 +177,9 @@ public class GeneratorThread extends Thread {
                 word.setPoint(p);
                 return word;
             }
-        } while ((float) (++attempts / words.size()) < crossingAttemptsFactor);
+            if (words.size() == 0) return null;
+            actual = ((float) ++attempts) / ((float) wordsCount);
+        } while (actual < crossingAttemptsFactor);
 
         return null;// cross failed
     }
@@ -210,10 +222,13 @@ public class GeneratorThread extends Thread {
                     if (crosspoint.y - i < 0 || crosspoint.y + wordLength - i - 1 >= maxSizeVertical)
                         continue;
                     if (crosspoint.y - i - 1 >= 0) {
+
+
                         if ((isWordChar(matrix[crosspoint.x][crosspoint.y - i - 1])) &&
 
-                                (crosspoint.y + wordLength - i + 1 < maxSizeVertical && isWordChar(matrix[crosspoint.x][crosspoint.y + wordLength - i + 2])))
+                                (crosspoint.y + wordLength - i + 1 < maxSizeVertical && isWordChar(matrix[crosspoint.x][crosspoint.y + wordLength - i + 1])))
                             continue;
+
                     }
                     crossPointsStartShift.add(crosspoint.y - i);
                     succesfullSearching = true;
@@ -241,7 +256,7 @@ public class GeneratorThread extends Thread {
     /**
      * Wstawia słowo w krzyżówce.
      *
-     * @param word             sprawdzane słowo
+     * @param wordW            sprawdzane słowo
      * @param newWordDirection ułozenie słowa pionowe lub poziome
      * @param crosspoint       punkt przecięcia z istniejącym słowem na krzyżówce
      * @param startPoint       punkt rozpoczęcia nowego słowa (zależy od newWordDirection)
@@ -330,6 +345,8 @@ public class GeneratorThread extends Thread {
     private Word searchWordToCross(char c) {   //szukanie słowa z taką samą literą
 
         int attempts = 0;
+
+        if (words.size() == 0) return null;
         do {
             int currentWordsIndex = getRandomInt(words.size() - 1);
             Word w = words.get(currentWordsIndex);
@@ -357,16 +374,6 @@ public class GeneratorThread extends Thread {
      */
     private void calculateFitness() {
         fitness = ((float) cellsUsed / (matrix[0].length * matrix.length) + (float) (wordsUsageFactor * wordsUsed / wordsCount)) / (float) (1 + wordsUsageFactor);
-    }
-
-    /**
-     * Sprawdza czy znak jest znakiem uprawnionym do wystąpowanie w słowie w krzyżówce.
-     *
-     * @param c             znak do sprawdzenia
-     * @return Prawda jeśli jest uprawnionym znakiem do wystąpowanie w słowie w krzyżówce.
-     */
-    private static boolean isWordChar(char c) {
-        return c != '\u0000' && c != wipeChar;
     }
 
     /**

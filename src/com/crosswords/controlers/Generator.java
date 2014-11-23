@@ -1,6 +1,7 @@
 package com.crosswords.controlers;
 
 import com.crosswords.models.CrosswordDictionary;
+import com.crosswords.models.Direction;
 import com.crosswords.models.IEntry;
 import com.crosswords.models.Word;
 
@@ -14,8 +15,8 @@ import java.util.Set;
  */
 public class Generator {
 
+    private static final float reduceSizeFactor = 0.4f;
     private static List<Word> words;
-
 
     public Generator() {
         words = new ArrayList<Word>();
@@ -30,15 +31,47 @@ public class Generator {
 
         GeneratorThread[] ths = new GeneratorThread[processors];
 
-        if (words.size() == 0) return null;
+
+        double tmp = Math.max((float) Math.sqrt(words.size()) * reduceSizeFactor, (float) words.get(0).getWord().length());
+        int autoMaxSizeHorizontal = (int) (tmp * 1.5f);
+        int autoMaxSizeVertical = (int) tmp;
+
+        Direction firstWordDirect = Direction.Vertical;
+
+        if (maxSizeHorizontal == 0 && maxSizeVertical == 0)
+            firstWordDirect = Direction.getRandomDirection();
+
+        else if (maxSizeHorizontal != 0)
+            firstWordDirect = Direction.Vertical;
+        else if (maxSizeVertical != 0)
+            firstWordDirect = Direction.Horizontal;
+
+        if (maxSizeHorizontal != 0 && maxSizeVertical != 0) {
+            firstWordDirect = (maxSizeHorizontal > maxSizeVertical) ? Direction.Horizontal : Direction.Vertical;
+            int maxSize = Math.max(maxSizeHorizontal, maxSizeVertical);
+            int i = 0;
+
+            while (i < words.size() && words.get(i).getWord().length() > maxSize) i++;
+
+            words.subList(0, i).clear();
+        }
+
+        maxSizeHorizontal = (maxSizeHorizontal != 0) ? maxSizeHorizontal : autoMaxSizeHorizontal;
+        maxSizeVertical = (maxSizeVertical != 0) ? maxSizeVertical : autoMaxSizeVertical;
+
+
+        if (words.size() == 0) {
+            return null;
+        }
         for (int i = 0; i < processors; i++) {
-            ths[i] = new GeneratorThread(new ArrayList<Word>(words), maxWordsCount, maxSizeVertical, maxSizeHorizontal);
+            ths[i] = new GeneratorThread(new ArrayList<Word>(words), maxWordsCount, maxSizeVertical, maxSizeHorizontal, firstWordDirect);
             ths[i].start();
             ths[i].join();
             ths[i].printDebug();
         }
         return ths[chooseBestResult(ths)];
     }
+
 
     private static void createWords(Set<IEntry> entries) {
         Iterator<IEntry> iterator = entries.iterator();
@@ -65,7 +98,7 @@ public class Generator {
     }
 
     private static int chooseBestResult(GeneratorThread[] ths) {
-        float maxFitness = 0;
+        float maxFitness = -1.0f;
         int indexBest = -1;
         for (int i = 0; i < ths.length; i++) {
             float currentFitness = ths[i].getFitness();
