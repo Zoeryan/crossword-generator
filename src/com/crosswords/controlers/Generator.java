@@ -67,7 +67,7 @@ public class Generator {
             ths[i] = new GeneratorThread(new ArrayList<Word>(words), maxWordsCount, maxSizeVertical, maxSizeHorizontal, firstWordDirect);
             ths[i].start();
             ths[i].join();
-            ths[i].printDebug();
+            //ths[i].printDebug();
         }
         return ths[chooseBestResult(ths)];
     }
